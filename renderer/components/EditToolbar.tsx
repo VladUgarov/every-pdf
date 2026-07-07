@@ -6,6 +6,7 @@ import SaveIcon from '@mui/icons-material/Save';
 import TextFieldsIcon from '@mui/icons-material/TextFields';
 import GestureIcon from '@mui/icons-material/Gesture';
 import CheckBoxOutlineBlankIcon from '@mui/icons-material/CheckBoxOutlineBlank';
+import FindReplaceIcon from '@mui/icons-material/FindReplace';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { usePDFEdit } from "../contexts/PDFEditContext";
@@ -13,7 +14,7 @@ import { useTranslation } from "react-i18next";
 
 type EditToolbarProps = {
   // [수정] onAddElement -> onSetPendingElement
-  onSetPendingElement: (type: 'text' | 'signature' | 'checkbox') => void;
+  onSetPendingElement: (type: 'text' | 'signature' | 'checkbox' | 'replace') => void;
   onSave: () => void;
   isSaving: boolean;
   onUploadClick: () => void;
@@ -71,6 +72,14 @@ const EditToolbar = ({ onSetPendingElement, onSave, isSaving, onUploadClick, onG
             >
               <CheckBoxOutlineBlankIcon className="w-4 h-4 group-hover:text-primary transition-colors" />
               <span className="text-sm group-hover:text-primary transition-colors">{t("checkbox")}</span>
+            </button>
+            <button
+              onClick={() => onSetPendingElement('replace')}
+              disabled={!state.pdfFile}
+              className="group flex items-center gap-2 px-3 py-2 rounded-md border border-border bg-card-bg hover:bg-button-hover hover:border-primary text-text theme-transition disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 transform hover:scale-105 active:scale-95 shadow-sm hover:shadow-md"
+            >
+              <FindReplaceIcon className="w-4 h-4 group-hover:text-primary transition-colors" />
+              <span className="text-sm group-hover:text-primary transition-colors">{t("replace", "Replace")}</span>
             </button>
           </div>
 

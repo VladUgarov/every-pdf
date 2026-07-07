@@ -9,6 +9,7 @@ from .addWatermark import router as add_watermark_router
 from .encrypt import router as encrypt_router
 from .decrypt import router as decrypt_router
 from .edit import router as edit_router
+from .detectStyle import router as detect_style_router
 
 # get_session_dir, parse_page_ranges는 utils에서 import
 from pdf_processor.utils import get_session_dir, parse_page_ranges
@@ -23,3 +24,4 @@ def register_routers(app: FastAPI):
     app.include_router(encrypt_router)
     app.include_router(decrypt_router)
     app.include_router(edit_router)
+    app.include_router(detect_style_router)

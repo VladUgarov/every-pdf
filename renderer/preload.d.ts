@@ -11,6 +11,10 @@ declare global {
          * @returns 편집된 PDF 파일의 Blob
          */
         editPdf: (file: File, elements: any[]) => Promise<Blob>;
+        detectTextStyle: (
+          file: File,
+          area: { page: number; x: number; y: number; width: number; height: number }
+        ) => Promise<any>;
 
         /**
          * PDF 파일을 지정된 페이지들로 분할

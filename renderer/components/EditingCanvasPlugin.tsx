@@ -5,15 +5,32 @@ import { useTranslation } from 'react-i18next';
 import { Plugin, PluginRenderPageLayer } from '@react-pdf-viewer/core';
 import Draggable, { DraggableData, DraggableEvent } from 'react-draggable';
 import { Box, Typography } from '@mui/material';
-import { usePDFEdit, PDFEditElement, PDFTextElement, PDFSignatureElement, PDFCheckboxElement } from '../contexts/PDFEditContext';
+import { usePDFEdit, PDFEditElement, PDFTextElement, PDFSignatureElement, PDFCheckboxElement, PDFReplaceElement } from '../contexts/PDFEditContext';
 import TextFieldsIcon from '@mui/icons-material/TextFields';
 import GestureIcon from '@mui/icons-material/Gesture';
 import CheckBoxOutlineBlankIcon from '@mui/icons-material/CheckBoxOutlineBlank';
+import FindReplaceIcon from '@mui/icons-material/FindReplace';
 import ContextMenu from './ContextMenu';
+
+const DraggableComponent = Draggable as React.ComponentType<any>;
+
+const getCssFontFamily = (fontFamily?: string) => {
+    switch (fontFamily) {
+        case 'Times-Roman':
+            return 'Times New Roman, Times, serif';
+        case 'Courier':
+            return 'Courier New, Courier, monospace';
+        case 'NotoSansKR':
+            return 'Noto Sans KR, sans-serif';
+        case 'Helvetica':
+        default:
+            return 'Helvetica, Arial, sans-serif';
+    }
+};
 
 interface EditingCanvasPluginProps {
   onEditElement: (element: PDFEditElement) => void;
-  onPlaceElement: (type: 'text' | 'signature' | 'checkbox', page: number, x: number, y: number) => void;
+  onPlaceElement: (type: 'text' | 'signature' | 'checkbox' | 'replace', page: number, x: number, y: number) => void;
   onCancelPlaceElement: () => void;
   onDeselect: () => void;
 }
@@ -136,6 +153,7 @@ const EditingOverlay: React.FC<PluginRenderPageLayer & EditingCanvasPluginProps>
             case 'text': return <Box sx={ghostStyle}><TextFieldsIcon fontSize="small" />{t('addText')}</Box>;
             case 'signature': return <Box sx={ghostStyle}><GestureIcon fontSize="small" />{t('addSignature')}</Box>;
             case 'checkbox': return <Box sx={ghostStyle}><CheckBoxOutlineBlankIcon fontSize="small" />{t('addCheckbox')}</Box>;
+            case 'replace': return <Box sx={ghostStyle}><FindReplaceIcon fontSize="small" />{t('addReplace', 'Add Replace')}</Box>;
             default: return null;
         }
     };
@@ -158,7 +176,7 @@ const EditingOverlay: React.FC<PluginRenderPageLayer & EditingCanvasPluginProps>
                 const nodeRef = getNodeRef(el.id);
                 const draggableKey = `${el.id}:${el.x}:${el.y}:${scale}`;
                 return (
-                    <Draggable
+                    <DraggableComponent
                         key={draggableKey}
                         nodeRef={nodeRef}
                         defaultPosition={{ x: el.x * scale, y: el.y * scale }}
@@ -181,7 +199,16 @@ const EditingOverlay: React.FC<PluginRenderPageLayer & EditingCanvasPluginProps>
                             }}
                         >
                             {el.type === 'text' && (
-                                <Typography sx={{ color: (el as PDFTextElement).color, fontSize: `${(el as PDFTextElement).fontSize * scale}px`, whiteSpace: 'pre-wrap', userSelect: 'none', lineHeight: 1.2 }}>
+                                <Typography sx={{
+                                    color: (el as PDFTextElement).color,
+                                    fontFamily: getCssFontFamily((el as PDFTextElement).fontFamily),
+                                    fontWeight: (el as PDFTextElement).fontBold ? 700 : 400,
+                                    fontSize: `${(el as PDFTextElement).fontSize * scale}px`,
+                                    letterSpacing: `${((el as PDFTextElement).letterSpacing || 0) * scale}px`,
+                                    whiteSpace: 'pre-wrap',
+                                    userSelect: 'none',
+                                    lineHeight: 1.2,
+                                }}>
                                     {(el as PDFTextElement).text}
                                 </Typography>
                             )}
@@ -236,8 +263,37 @@ const EditingOverlay: React.FC<PluginRenderPageLayer & EditingCanvasPluginProps>
                                     </svg>
                                 );
                             })()}
+                            {el.type === 'replace' && (() => {
+                                const replaceEl = el as PDFReplaceElement;
+                                return (
+                                    <Box sx={{
+                                        width: replaceEl.width * scale,
+                                        height: replaceEl.height * scale,
+                                        backgroundColor: replaceEl.fillColor,
+                                        border: isSelected ? '2px solid #007BFF' : '1px dashed #007BFF',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: replaceEl.align === 'left' ? 'flex-start' : replaceEl.align === 'right' ? 'flex-end' : 'center',
+                                        px: `${Math.max(replaceEl.padding, 0) * scale}px`,
+                                        overflow: 'hidden',
+                                    }}>
+                                        <Typography sx={{
+                                            color: replaceEl.color,
+                                            fontFamily: getCssFontFamily(replaceEl.fontFamily),
+                                            fontWeight: replaceEl.fontBold ? 700 : 400,
+                                            fontSize: `${replaceEl.fontSize * scale}px`,
+                                            lineHeight: 1,
+                                            whiteSpace: 'nowrap',
+                                            userSelect: 'none',
+                                            transform: `translateY(${(replaceEl.yOffset || 0) * scale}px)`,
+                                        }}>
+                                            {replaceEl.text || t('replacementText', 'Replacement Text')}
+                                        </Typography>
+                                    </Box>
+                                );
+                            })()}
                         </Box>
-                    </Draggable>
+                    </DraggableComponent>
                 );
             })}
             

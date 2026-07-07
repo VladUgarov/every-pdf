@@ -81,7 +81,7 @@ const EditorPageContent = () => {
         if (file) setPdfFile(file);
     }, [setPdfFile]);
     
-    const handlePlaceElement = useCallback((type: "text" | "signature" | "checkbox", page: number, x: number, y: number) => {
+    const handlePlaceElement = useCallback((type: "text" | "signature" | "checkbox" | "replace", page: number, x: number, y: number) => {
         const baseElement = { id: uuidv4(), page, x, y };
         let newElement: PDFEditElement;
         switch (type) {
@@ -92,6 +92,9 @@ const EditorPageContent = () => {
                     text: tEditor("textPlaceholder"),
                     fontSize: state.preferredTextFontSize,
                     color: "#222222",
+                    fontFamily: "Helvetica",
+                    fontBold: false,
+                    letterSpacing: 0,
                     hasBackground: false,
                     backgroundColor: "#ffffff",
                 };
@@ -101,6 +104,23 @@ const EditorPageContent = () => {
                 break;
             case 'checkbox': 
                 newElement = { ...baseElement, type: 'checkbox', checked: false, size: 18, color: '#ffffff', borderColor: '#000000', isTransparent: false, hasBorder: true }; 
+                break;
+            case 'replace':
+                newElement = {
+                    ...baseElement,
+                    type: 'replace',
+                    text: '',
+                    width: 120,
+                    height: 24,
+                    fontSize: state.preferredTextFontSize,
+                    color: '#111111',
+                    fontFamily: 'Helvetica',
+                    fontBold: false,
+                    align: 'center',
+                    fillColor: '#ffffff',
+                    padding: 1,
+                    yOffset: 0,
+                };
                 break;
         }
         addElement(newElement);

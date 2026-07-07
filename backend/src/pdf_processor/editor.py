@@ -14,6 +14,7 @@ from pypdf import PdfReader, PdfWriter
 from PIL import Image
 import tempfile
 from pathlib import Path
+import fitz
 
 # --- Enhanced font setup based on addWatermark.py ---
 DEFAULT_FONT_NAME = "Helvetica"
@@ -76,6 +77,213 @@ def hex_to_color(hex_color: str):
     return HexColor(hex_color)
 
 
+def resolve_text_font(element: Dict[str, Any]) -> str:
+    font_family = element.get("fontFamily", "Helvetica")
+    font_bold = element.get("fontBold", False)
+
+    if font_family == "Times-Roman":
+        return "Times-Bold" if font_bold else "Times-Roman"
+    if font_family == "Courier":
+        return "Courier-Bold" if font_bold else "Courier"
+    if font_family == "NotoSansKR":
+        return BOLD_FONT_NAME if font_bold else REGULAR_FONT_NAME
+    return "Helvetica-Bold" if font_bold else "Helvetica"
+
+
+def text_width_with_spacing(text: str, font_name: str, font_size: float, char_spacing: float) -> float:
+    if not text:
+        return 0
+
+    return pdfmetrics.stringWidth(text, font_name, font_size) + max(len(text) - 1, 0) * char_spacing
+
+
+def hex_to_rgb_tuple(hex_color: str):
+    color = hex_color.lstrip("#")
+    if len(color) != 6:
+        return (0, 0, 0)
+    return tuple(int(color[i:i + 2], 16) / 255 for i in (0, 2, 4))
+
+
+def int_color_to_hex(color: int) -> str:
+    return f"#{(color >> 16) & 255:02x}{(color >> 8) & 255:02x}{color & 255:02x}"
+
+
+def map_pdf_font(font_name: str):
+    normalized = font_name.lower()
+    font_bold = any(token in normalized for token in ["bold", "black", "heavy", "semibold", "demi"])
+
+    if "times" in normalized:
+        font_family = "Times-Roman"
+    elif "courier" in normalized or "mono" in normalized:
+        font_family = "Courier"
+    elif "noto" in normalized:
+        font_family = "NotoSansKR"
+    else:
+        font_family = "Helvetica"
+
+    return font_family, font_bold
+
+
+def resolve_fitz_font(element: Dict[str, Any]) -> str:
+    font_family = element.get("fontFamily", "Helvetica")
+    font_bold = element.get("fontBold", False)
+
+    if font_family == "Times-Roman":
+        return "tibo" if font_bold else "tiro"
+    if font_family == "Courier":
+        return "cobo" if font_bold else "cour"
+    return "hebo" if font_bold else "helv"
+
+
+def get_centered_text_origin(
+    rect: fitz.Rect, text: str, font_name: str, font_size: float, align: str, y_offset: float = 0
+) -> fitz.Point:
+    font = fitz.Font(fontname=font_name)
+    text_width = fitz.get_text_length(text, fontname=font_name, fontsize=font_size)
+
+    if align == "right":
+        text_x = rect.x1 - text_width
+    elif align == "left":
+        text_x = rect.x0
+    else:
+        text_x = rect.x0 + (rect.width - text_width) / 2
+
+    text_height = font_size * (font.ascender - font.descender)
+    text_y = rect.y0 + (rect.height - text_height) / 2 + font_size * font.ascender + y_offset
+    return fitz.Point(text_x, text_y)
+
+
+def intersection_area(a: fitz.Rect, b: fitz.Rect) -> float:
+    intersection = a & b
+    if intersection.is_empty:
+        return 0
+    return intersection.width * intersection.height
+
+
+def detect_text_style_from_area(
+    pdf_file_stream: io.BytesIO,
+    page_number: int,
+    x: float,
+    y: float,
+    width: float,
+    height: float,
+) -> Dict[str, Any]:
+    doc = fitz.open(stream=pdf_file_stream.read(), filetype="pdf")
+    page_index = page_number - 1
+    if page_index < 0 or page_index >= len(doc):
+        raise ValueError("Page number is out of range")
+
+    page = doc[page_index]
+    target_rect = fitz.Rect(x, y, x + width, y + height)
+    target_center = target_rect.tl + (target_rect.br - target_rect.tl) * 0.5
+    best_span = None
+    best_rect = None
+    best_score = -1.0
+
+    for block in page.get_text("dict").get("blocks", []):
+        for line in block.get("lines", []):
+            for span in line.get("spans", []):
+                text = span.get("text", "").strip()
+                if not text:
+                    continue
+
+                span_rect = fitz.Rect(span.get("bbox"))
+                overlap = intersection_area(target_rect, span_rect)
+                if overlap <= 0:
+                    continue
+
+                span_center = span_rect.tl + (span_rect.br - span_rect.tl) * 0.5
+                distance = ((span_center.x - target_center.x) ** 2 + (span_center.y - target_center.y) ** 2) ** 0.5
+                score = overlap - distance * 0.01
+                if score > best_score:
+                    best_score = score
+                    best_span = span
+                    best_rect = span_rect
+
+    if not best_span or not best_rect:
+        raise ValueError("No text found in the selected area")
+
+    font_family, font_bold = map_pdf_font(best_span.get("font", ""))
+    font_name = resolve_fitz_font({"fontFamily": font_family, "fontBold": font_bold})
+    centered_origin = get_centered_text_origin(
+        best_rect,
+        best_span.get("text", "").strip(),
+        font_name,
+        float(best_span.get("size", 12)),
+        "center",
+    )
+    span_origin = best_span.get("origin")
+    y_offset = 0
+    if span_origin and len(span_origin) >= 2:
+        y_offset = float(span_origin[1]) - centered_origin.y
+
+    return {
+        "detectedText": best_span.get("text", "").strip(),
+        "x": best_rect.x0,
+        "y": best_rect.y0,
+        "width": best_rect.width,
+        "height": best_rect.height,
+        "fontSize": best_span.get("size", 12),
+        "color": int_color_to_hex(best_span.get("color", 0)),
+        "fontFamily": font_family,
+        "fontBold": font_bold,
+        "align": "center",
+        "yOffset": y_offset,
+    }
+
+
+def apply_replace_elements(pdf_bytes: bytes, elements: List[Dict[str, Any]]) -> bytes:
+    replace_elements = [el for el in elements if el.get("type") == "replace"]
+    if not replace_elements:
+        return pdf_bytes
+
+    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+
+    for el in replace_elements:
+        page_index = int(el.get("page", 1)) - 1
+        if page_index < 0 or page_index >= len(doc):
+            continue
+
+        page = doc[page_index]
+        x = float(el.get("x", 0))
+        y = float(el.get("y", 0))
+        width = max(float(el.get("width", 1)), 1)
+        height = max(float(el.get("height", 1)), 1)
+        padding = float(el.get("padding", 0))
+
+        redact_rect = fitz.Rect(
+            x + padding,
+            y + padding,
+            x + width - padding,
+            y + height - padding,
+        )
+        if redact_rect.is_empty or redact_rect.width <= 0 or redact_rect.height <= 0:
+            redact_rect = fitz.Rect(x, y, x + width, y + height)
+
+        fill_color = hex_to_rgb_tuple(el.get("fillColor", "#ffffff"))
+        page.add_redact_annot(redact_rect, fill=fill_color)
+        page.apply_redactions()
+
+        text = el.get("text", "")
+        if not text:
+            continue
+
+        insert_rect = fitz.Rect(x, y, x + width, y + height)
+        font_name = resolve_fitz_font(el)
+        font_size = float(el.get("fontSize", 12))
+        text_color = hex_to_rgb_tuple(el.get("color", "#000000"))
+        align = el.get("align", "center")
+        page.insert_text(
+            get_centered_text_origin(insert_rect, text, font_name, font_size, align, float(el.get("yOffset", 0))),
+            text,
+            fontname=font_name,
+            fontsize=font_size,
+            color=text_color,
+        )
+
+    return doc.tobytes(garbage=4, deflate=True)
+
+
 def create_overlay(
     page_width_pt: float, page_height_pt: float, elements: List[Dict[str, Any]]
 ) -> bytes:
@@ -91,6 +299,8 @@ def create_overlay(
 
         if el_type == "text":
             font_size_px = el.get("fontSize", 12)
+            font_name = resolve_text_font(el)
+            letter_spacing = el.get("letterSpacing", 0)
             text_content = el.get("text", "")
             lines = text_content.splitlines() if text_content else []
 
@@ -99,7 +309,7 @@ def create_overlay(
             max_width = 0
             if lines:
                 max_width = max(
-                    pdfmetrics.stringWidth(line, DEFAULT_FONT_NAME, font_size_px)
+                    text_width_with_spacing(line, font_name, font_size_px, letter_spacing)
                     for line in lines
                 )
 
@@ -119,7 +329,8 @@ def create_overlay(
 
             if lines:
                 text_object = c.beginText()
-                text_object.setFont(DEFAULT_FONT_NAME, font_size_px)
+                text_object.setFont(font_name, font_size_px)
+                text_object.setCharSpace(letter_spacing)
                 text_object.setFillColor(hex_to_color(el.get("color", "#000000")))
                 text_object.setLeading(line_height)
 
@@ -209,13 +420,17 @@ def apply_edits_to_pdf(pdf_file_stream: io.BytesIO, elements_json: str) -> bytes
     except json.JSONDecodeError:
         raise ValueError("Invalid JSON format for elements")
 
-    for el in all_elements:
+    original_pdf_bytes = pdf_file_stream.read()
+    pdf_bytes = apply_replace_elements(original_pdf_bytes, all_elements)
+    overlay_elements = [el for el in all_elements if el.get("type") != "replace"]
+
+    for el in overlay_elements:
         page_str = str(el.get("page"))
         if page_str not in elements_by_page:
             elements_by_page[page_str] = []
         elements_by_page[page_str].append(el)
 
-    reader = PdfReader(pdf_file_stream)
+    reader = PdfReader(io.BytesIO(pdf_bytes))
     writer = PdfWriter()
 
     for i, page in enumerate(reader.pages):

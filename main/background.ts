@@ -1,17 +1,21 @@
 import { app, ipcMain, dialog, Menu, BrowserWindow, MenuItemConstructorOptions } from 'electron';
 import fs from 'fs/promises';
 import serve from 'electron-serve';
-import { autoUpdater } from 'electron-updater';
 import log from 'electron-log';
 import { createWindow } from './helpers';
 import { join } from 'path';
 import { spawn } from 'child_process';
 import { existsSync } from 'fs';
 // 자동 업데이트 로그 설정
-autoUpdater.logger = log;
 log.transports.file.level = 'info';
 
 const isProd: boolean = process.env.NODE_ENV === 'production';
+let autoUpdater: any = null;
+
+if (isProd) {
+  autoUpdater = require('electron-updater').autoUpdater;
+  autoUpdater.logger = log;
+}
 
 if (isProd) {
   serve({ directory: 'app' });
@@ -215,6 +219,7 @@ ipcMain.handle('show-save-dialog', async (event, options) => {
 });
 
 // 자동 업데이트 이벤트 핸들러
+if (autoUpdater) {
 autoUpdater.on('checking-for-update', () => {
   console.log('업데이트 확인 중...');
 });
@@ -263,6 +268,7 @@ autoUpdater.on('update-downloaded', (info) => {
     }
   });
 });
+}
 
 (async () => {
   await app.whenReady();

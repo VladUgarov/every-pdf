@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import TextEditTool from './TextEditTool';
 import SignatureEditTool from './SignatureEditTool';
 import CheckboxEditTool from './CheckboxEditTool';
+import ReplaceTextTool from './ReplaceTextTool';
 
 const InspectorSidebar = () => {
     const { state, updateElement, removeElement } = usePDFEdit();
@@ -35,6 +36,8 @@ const InspectorSidebar = () => {
                 return <SignatureEditTool editingElement={selectedElement} onUpdate={handleUpdate} />;
             case 'checkbox':
                 return <CheckboxEditTool editingElement={selectedElement} onUpdate={handleUpdate} />;
+            case 'replace':
+                return <ReplaceTextTool editingElement={selectedElement} onUpdate={handleUpdate} />;
             default:
                 return null;
         }

@@ -6,6 +6,9 @@ import { v4 as uuidv4 } from 'uuid';
 export type PDFTextElement = {
   id: string; type: 'text'; page: number; x: number; y: number;
   text: string; fontSize: number; color: string;
+  fontFamily: string;
+  fontBold: boolean;
+  letterSpacing: number;
   hasBackground: boolean;
   backgroundColor: string;
 };
@@ -21,7 +24,13 @@ export type PDFCheckboxElement = {
     isTransparent: boolean; 
     hasBorder: boolean;     
 };
-export type PDFEditElement = PDFTextElement | PDFSignatureElement | PDFCheckboxElement;
+export type PDFReplaceElement = {
+    id: string; type: 'replace'; page: number; x: number; y: number;
+    text: string; width: number; height: number; fontSize: number; color: string;
+    fontFamily: string; fontBold: boolean; align: 'left' | 'center' | 'right';
+    fillColor: string; padding: number; yOffset: number;
+};
+export type PDFEditElement = PDFTextElement | PDFSignatureElement | PDFCheckboxElement | PDFReplaceElement;
 
 type PDFEditState = {
   pdfFile: File | null;
@@ -32,7 +41,7 @@ type PDFEditState = {
   elements: PDFEditElement[];
   elementsByPage: Record<number, PDFEditElement[]>;
   selectedElementId: string | null;
-  pendingElementType: 'text' | 'signature' | 'checkbox' | null;
+  pendingElementType: 'text' | 'signature' | 'checkbox' | 'replace' | null;
   history: PDFEditElement[][];
   historyIndex: number;
   clipboard: PDFEditElement | null;
@@ -47,7 +56,7 @@ type Action =
   | { type: 'REMOVE_ELEMENT'; payload: string }
   | { type: 'SET_SELECTED_ELEMENT_ID'; payload: string | null }
   | { type: 'SET_ELEMENTS'; payload: PDFEditElement[] }
-  | { type: 'SET_PENDING_ELEMENT_TYPE', payload: 'text' | 'signature' | 'checkbox' | null }
+  | { type: 'SET_PENDING_ELEMENT_TYPE', payload: 'text' | 'signature' | 'checkbox' | 'replace' | null }
   | { type: 'UNDO' }
   | { type: 'REDO' }
   | { type: 'COPY_ELEMENT'; payload: PDFEditElement }
@@ -325,7 +334,7 @@ export const usePDFEdit = () => {
     dispatch({ type: 'SET_ELEMENTS', payload });
   }, [dispatch]);
 
-  const setPendingElementType = useCallback((payload: 'text' | 'signature' | 'checkbox' | null) => {
+  const setPendingElementType = useCallback((payload: 'text' | 'signature' | 'checkbox' | 'replace' | null) => {
     dispatch({ type: 'SET_PENDING_ELEMENT_TYPE', payload });
   }, [dispatch]);
 

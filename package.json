@@ -14,6 +14,7 @@
     "dev:frontend": "nextron",
     "dev:backend": "cd backend/src && ../../backend/venv/bin/python -m pdf_processor",
     "dev:backend:win": "cd backend/src && ..\\venv\\Scripts\\python -m pdf_processor",
+    "dev:win": "npm run copy-pdf-worker && concurrently \"npm run dev:frontend\" \"npm run dev:backend:win\"",
     "build": "npm run copy-pdf-worker && npm run setup-backend && npm run build-backend && nextron build",
     "build:win": "npm run setup-backend && npm run build-backend && nextron build --win --x64",
     "build:mac": "npm run setup-backend && npm run build-backend && nextron build --mac --universal",

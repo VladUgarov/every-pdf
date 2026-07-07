@@ -55,6 +55,32 @@ const pdfApi = {
   },
 
   // --- 이하 기존 함수들 (변경 없음) ---
+  detectTextStyle: async (
+    file: File,
+    area: { page: number; x: number; y: number; width: number; height: number }
+  ): Promise<any> => {
+    const port = await getBackendPort();
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('page', area.page.toString());
+    formData.append('x', area.x.toString());
+    formData.append('y', area.y.toString());
+    formData.append('width', area.width.toString());
+    formData.append('height', area.height.toString());
+
+    const response = await fetch(`${BASE_URL}:${port}/detect-text-style`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Style detection failed: ${errorText.substring(0, 200)}`);
+    }
+
+    return response.json();
+  },
+
   splitPdf: async (file: File, pages: string): Promise<Blob> => {
     const port = await getBackendPort();
     const formData = new FormData();

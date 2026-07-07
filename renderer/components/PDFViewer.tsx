@@ -19,7 +19,7 @@ import { useTranslation } from "react-i18next";
 // [수정] onDeselect prop 추가
 type PDFViewerProps = {
   onEditElement: (element: PDFEditElement) => void;
-  onPlaceElement: (type: 'text' | 'signature' | 'checkbox', page: number, x: number, y: number) => void;
+  onPlaceElement: (type: 'text' | 'signature' | 'checkbox' | 'replace', page: number, x: number, y: number) => void;
   onCancelPlaceElement: () => void;
   onUploadClick: () => void;
   onDeselect: () => void;
