@@ -9,6 +9,51 @@ import { existsSync } from 'fs';
 // 자동 업데이트 로그 설정
 log.transports.file.level = 'info';
 
+const isBrokenPipeError = (error: any) => error?.code === 'EPIPE';
+const originalConsoleLog = console.log.bind(console);
+const originalConsoleError = console.error.bind(console);
+
+console.log = (...args: any[]) => {
+  try {
+    originalConsoleLog(...args);
+  } catch (error) {
+    if (!isBrokenPipeError(error)) {
+      throw error;
+    }
+  }
+};
+
+console.error = (...args: any[]) => {
+  try {
+    originalConsoleError(...args);
+  } catch (error) {
+    if (!isBrokenPipeError(error)) {
+      throw error;
+    }
+  }
+};
+
+process.stdout?.on('error', (error: any) => {
+  if (!isBrokenPipeError(error)) {
+    originalConsoleError(error);
+  }
+});
+
+process.stderr?.on('error', (error: any) => {
+  if (!isBrokenPipeError(error)) {
+    originalConsoleError(error);
+  }
+});
+
+process.on('uncaughtException', (error: any) => {
+  if (isBrokenPipeError(error)) {
+    return;
+  }
+
+  originalConsoleError(error);
+  throw error;
+});
+
 const isProd: boolean = process.env.NODE_ENV === 'production';
 let autoUpdater: any = null;
 

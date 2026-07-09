@@ -135,11 +135,47 @@ def resolve_fitz_font(element: Dict[str, Any]) -> str:
     return "hebo" if font_bold else "helv"
 
 
+def resolve_fitz_font_file(element: Dict[str, Any], text: str = "") -> Path | None:
+    font_family = element.get("fontFamily", "Helvetica")
+    needs_unicode_font = font_family == "NotoSansKR" or any(ord(char) > 127 for char in text)
+    if not needs_unicode_font:
+        return None
+
+    font_dir = resolve_font_dir()
+    if not font_dir:
+        return None
+
+    font_file = BOLD_FONT_FILE if element.get("fontBold", False) else REGULAR_FONT_FILE
+    font_path = font_dir / font_file
+    return font_path if font_path.exists() else None
+
+
+def get_fitz_font_name(element: Dict[str, Any], text: str = "") -> str:
+    font_file = resolve_fitz_font_file(element, text)
+    if font_file:
+        return "notosanskr-bold" if element.get("fontBold", False) else "notosanskr"
+
+    return resolve_fitz_font(element)
+
+
+def get_text_length(text: str, font_name: str, font_size: float, font_file: Path | None = None) -> float:
+    if font_file:
+        return fitz.Font(fontfile=str(font_file)).text_length(text, fontsize=font_size)
+
+    return fitz.get_text_length(text, fontname=font_name, fontsize=font_size)
+
+
 def get_centered_text_origin(
-    rect: fitz.Rect, text: str, font_name: str, font_size: float, align: str, y_offset: float = 0
+    rect: fitz.Rect,
+    text: str,
+    font_name: str,
+    font_size: float,
+    align: str,
+    y_offset: float = 0,
+    font_file: Path | None = None,
 ) -> fitz.Point:
-    font = fitz.Font(fontname=font_name)
-    text_width = fitz.get_text_length(text, fontname=font_name, fontsize=font_size)
+    font = fitz.Font(fontfile=str(font_file)) if font_file else fitz.Font(fontname=font_name)
+    text_width = get_text_length(text, font_name, font_size, font_file)
 
     if align == "right":
         text_x = rect.x1 - text_width
@@ -204,13 +240,16 @@ def detect_text_style_from_area(
         raise ValueError("No text found in the selected area")
 
     font_family, font_bold = map_pdf_font(best_span.get("font", ""))
-    font_name = resolve_fitz_font({"fontFamily": font_family, "fontBold": font_bold})
+    detected_font_element = {"fontFamily": font_family, "fontBold": font_bold}
+    font_name = get_fitz_font_name(detected_font_element, best_span.get("text", "").strip())
+    font_file = resolve_fitz_font_file(detected_font_element, best_span.get("text", "").strip())
     centered_origin = get_centered_text_origin(
         best_rect,
         best_span.get("text", "").strip(),
         font_name,
         float(best_span.get("size", 12)),
         "center",
+        font_file=font_file,
     )
     span_origin = best_span.get("origin")
     y_offset = 0
@@ -269,16 +308,23 @@ def apply_replace_elements(pdf_bytes: bytes, elements: List[Dict[str, Any]]) -> 
             continue
 
         insert_rect = fitz.Rect(x, y, x + width, y + height)
-        font_name = resolve_fitz_font(el)
+        font_name = get_fitz_font_name(el, text)
+        font_file = resolve_fitz_font_file(el, text)
         font_size = float(el.get("fontSize", 12))
         text_color = hex_to_rgb_tuple(el.get("color", "#000000"))
         align = el.get("align", "center")
+        insert_kwargs = {
+            "fontname": font_name,
+            "fontsize": font_size,
+            "color": text_color,
+        }
+        if font_file:
+            insert_kwargs["fontfile"] = str(font_file)
+
         page.insert_text(
-            get_centered_text_origin(insert_rect, text, font_name, font_size, align, float(el.get("yOffset", 0))),
+            get_centered_text_origin(insert_rect, text, font_name, font_size, align, float(el.get("yOffset", 0)), font_file),
             text,
-            fontname=font_name,
-            fontsize=font_size,
-            color=text_color,
+            **insert_kwargs,
         )
 
     return doc.tobytes(garbage=4, deflate=True)
